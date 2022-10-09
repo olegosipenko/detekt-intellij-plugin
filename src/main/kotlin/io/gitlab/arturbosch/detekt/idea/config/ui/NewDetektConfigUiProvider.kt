@@ -2,15 +2,7 @@ package io.gitlab.arturbosch.detekt.idea.config.ui
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
-import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.ui.dsl.builder.BottomGap
-import com.intellij.ui.dsl.builder.Cell
-import com.intellij.ui.dsl.builder.MutableProperty
-import com.intellij.ui.dsl.builder.Panel
-import com.intellij.ui.dsl.builder.RowLayout
-import com.intellij.ui.dsl.builder.bindSelected
-import com.intellij.ui.dsl.builder.bindText
-import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.dsl.gridLayout.HorizontalAlign
 import com.intellij.ui.dsl.gridLayout.VerticalAlign
 import com.intellij.ui.layout.ComponentPredicate
@@ -19,8 +11,6 @@ import io.gitlab.arturbosch.detekt.idea.DetektBundle
 import io.gitlab.arturbosch.detekt.idea.config.DetektPluginSettings
 import io.gitlab.arturbosch.detekt.idea.util.toPathsSet
 import io.gitlab.arturbosch.detekt.idea.util.toVirtualFilesList
-import io.gitlab.arturbosch.detekt.idea.util.validateAsFilePath
-import java.io.File
 import javax.swing.JCheckBox
 import javax.swing.JPanel
 import kotlin.reflect.KMutableProperty0
@@ -75,7 +65,7 @@ internal class NewDetektConfigUiProvider(
         ) {
             configurationFilesRow(enabled)
 
-            baselineFileRow(enabled)
+            baselineFilesRow(enabled)
 
             pluginJarsRow(enabled)
         }
@@ -110,29 +100,30 @@ internal class NewDetektConfigUiProvider(
         }.bottomGap(BottomGap.MEDIUM)
     }
 
-    private fun Panel.baselineFileRow(enabled: ComponentPredicate) {
-        row(DetektBundle.message("detekt.configuration.baselineFile.title")) {
-            textFieldWithBrowseButton(
-                DetektBundle.message("detekt.configuration.baselineFile.dialog.title"),
-                project,
-                FileChooserDescriptorUtil.createSingleXmlChooserDescriptor()
-            )
-                .bindText(
-                    getter = { LocalFileSystem.getInstance().extractPresentableUrl(settings.baselinePath) },
-                    setter = {
-                        if (File(it).isFile) {
-                            settings.baselinePath = LocalFileSystem.getInstance().findFileByPath(it)?.path.orEmpty()
-                        } else {
-                            settings.baselinePath = ""
-                        }
-                    }
-                )
+    private fun Panel.baselineFilesRow(enabled: ComponentPredicate) {
+        row {
+            val label = label(DetektBundle.message("detekt.configuration.baselineFiles.title"))
+                .verticalAlign(VerticalAlign.TOP)
+                .component
+
+            val listModel = FilesListPanel.ListModel()
+            val filesListPanel = FilesListPanel(
+                listModel = listModel,
+                project = project,
+                fileChooserTitle = DetektBundle.message("detekt.configuration.baselineFiles.dialog.title"),
+                fileChooserDescription = DetektBundle.message("detekt.configuration.baselineFiles.dialog.description"),
+                descriptorProvider = { FileChooserDescriptorUtil.createXmlChooserDescriptor() }
+            ).decorated()
+
+            cell(filesListPanel)
                 .horizontalAlign(HorizontalAlign.FILL)
                 .resizableColumn()
                 .enabledIf(enabled)
-                .validationOnInput { validateAsFilePath(it.text, isWarning = true) }
-                .validationOnApply { validateAsFilePath(it.text) }
-        }
+                // TODO Oleg - merge multiple baselines
+                .bindItems(settings::baselinePaths, listModel)
+
+            label.labelFor = filesListPanel
+        }.layout(RowLayout.LABEL_ALIGNED)
 
         row("") {
             comment(DetektBundle.message("detekt.configuration.baselineFile.comment"))
